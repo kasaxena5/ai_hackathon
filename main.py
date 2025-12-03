@@ -1,160 +1,134 @@
 """
-CLI Client for Support Ticket Processing
+FastAPI Backend Service for Support Ticket Processing
 
-This module provides a command-line interface for users to submit support tickets
-and get responses through the guard-railed support ticket copilot pipeline.
+This module provides a REST API service for processing support tickets
+through the guard-railed support ticket copilot pipeline.
 """
 
-import sys
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any
 from ticket_graph import process_ticket
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Support Ticket Copilot API",
+    description="A guard-railed support ticket processing service",
+    version="1.0.0"
+)
 
 
-def get_user_input():
+# Pydantic models for request/response
+class TicketRequest(BaseModel):
+    """Request model for ticket submission."""
+    employee_id: str = Field(..., description="Employee ID of the ticket submitter")
+    subject: str = Field(..., description="Subject/title of the support ticket")
+    body: str = Field(..., description="Detailed description of the issue")
+
+class TicketResponse(BaseModel):
+    """Response model for ticket processing results."""
+    ticket_id: Optional[str] = Field(None, description="Unique identifier for the ticket")
+    outcome: str = Field(..., description="Final processing outcome")
+    response: str = Field(..., description="Response message to the user")
+
+class HealthResponse(BaseModel):
+    """Health check response model."""
+    status: str = Field(..., description="Service health status")
+    message: str = Field(..., description="Health check message")
+
+
+# API Routes
+
+@app.get("/", tags=["Health"])
+async def root():
+    """Root endpoint with basic service information."""
+    return {
+        "service": "Support Ticket Copilot API",
+        "version": "1.0.0",
+        "status": "running"
+    }
+
+
+@app.get("/health", response_model=HealthResponse, tags=["Health"])
+async def health_check():
+    """Health check endpoint."""
+    return HealthResponse(
+        status="healthy",
+        message="Support Ticket Copilot API is running normally"
+    )
+
+
+@app.post("/tickets/process", response_model=TicketResponse, tags=["Tickets"])
+async def process_support_ticket(ticket: TicketRequest):
     """
-    Collect ticket information from the user via command line input.
+    Process a support ticket through the guard-railed pipeline.
     
-    Returns:
-        tuple: (employee_id, subject, body)
-    """
-    print("=" * 60)
-    print("    SUPPORT TICKET COPILOT - CLI CLIENT")
-    print("=" * 60)
-    print()
-    
-    # Get employee ID
-    while True:
-        employee_id = input("Enter your Employee ID: ").strip()
-        if employee_id:
-            break
-        print("Employee ID cannot be empty. Please try again.")
-    
-    # Get subject
-    while True:
-        subject = input("Enter ticket subject: ").strip()
-        if subject:
-            break
-        print("Subject cannot be empty. Please try again.")
-    
-    # Get body/description
-    print("\nEnter ticket description (press Enter twice when finished):")
-    body_lines = []
-    empty_line_count = 0
-    
-    while True:
-        line = input()
-        if line.strip() == "":
-            empty_line_count += 1
-            if empty_line_count >= 2:
-                break
-        else:
-            empty_line_count = 0
-            body_lines.append(line)
-    
-    body = "\n".join(body_lines).strip()
-    
-    if not body:
-        print("Description cannot be empty. Please try again.")
-        return get_user_input()
-    
-    return employee_id, subject, body
-
-
-def display_result(result):
-    """
-    Display the processing result to the user.
+    This endpoint:
+    1. Validates the employee profile
+    2. Checks appropriateness of the request
+    3. Applies authorization rules
+    4. Attempts RAG-based resolution
+    5. Returns the final outcome and response
     
     Args:
-        result (dict): The final state from process_ticket containing outcome and response
-    """
-    print("\n" + "=" * 60)
-    print("    TICKET PROCESSING RESULT")
-    print("=" * 60)
+        ticket: TicketRequest containing employee_id, subject, and body
     
-    outcome = result.get('outcome', 'Unknown')
-    response = result.get('response', 'No response available')
+    Returns:
+        TicketResponse: Complete processing results
     
-    print(f"\nFinal Status: {outcome.upper()}")
-    print(f"\nMessage:")
-    print("-" * 40)
-    print(response)
-    print("-" * 40)
-    
-    # Add some context based on the outcome
-    outcome_context = {
-        'blocked_by_appropriateness': "🚫 Your request was blocked due to inappropriateness.",
-        'blocked_by_auth': "🔒 You don't have the required authorization.",
-        'needs_approval': "⏳ Your request requires additional approval.",
-        'solved_by_rag': "✅ Your request has been resolved automatically.",
-        'escalate': "📞 Your request has been escalated to human support."
-    }
-    
-    if outcome in outcome_context:
-        print(f"\nNote: {outcome_context[outcome]}")
-
-
-def main():
-    """
-    Main function to run the CLI client.
+    Raises:
+        HTTPException: If processing fails or invalid input is provided
     """
     try:
-        # Get input from user
-        employee_id, subject, body = get_user_input()
+        logger.info(f"Processing ticket from employee {ticket.employee_id}")
         
-        # Confirm submission
-        print(f"\nSubmitting ticket for Employee ID: {employee_id}")
-        print(f"Subject: {subject}")
-        print("\nProcessing your ticket...")
-        print("-" * 60)
+        # Validate input
+        if not ticket.employee_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID cannot be empty"
+            )
         
-        # Process the ticket
-        result = process_ticket(employee_id, subject, body)
+        if not ticket.subject.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subject cannot be empty"
+            )
         
-        # Display the result
-        display_result(result)
+        if not ticket.body.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ticket body cannot be empty"
+            )
         
-    except KeyboardInterrupt:
-        print("\n\nOperation cancelled by user.")
-        sys.exit(0)
+        # Process the ticket through the pipeline
+        result = process_ticket(ticket.employee_id, ticket.subject, ticket.body)
+        
+        logger.info(f"Ticket processing completed with outcome: {result.get('outcome', 'unknown')}")
+        
+        # Build response
+        response = TicketResponse(
+            outcome=result.get('outcome', 'unknown'),
+            response=result.get('response', 'No response available'),
+        )
+        
+        return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        print(f"\nAn error occurred while processing your ticket: {str(e)}")
-        print("Please try again or contact system administrator.")
-        sys.exit(1)
-
-
-def interactive_mode():
-    """
-    Run the client in interactive mode, allowing multiple ticket submissions.
-    """
-    print("Welcome to Support Ticket Copilot!")
-    print("Type 'quit' or 'exit' to stop the program.")
-    
-    while True:
-        try:
-            # Ask if user wants to submit a ticket
-            print("\n" + "=" * 60)
-            action = input("Would you like to submit a ticket? (y/n/quit): ").strip().lower()
-            
-            if action in ['quit', 'exit', 'q']:
-                print("Thank you for using Support Ticket Copilot!")
-                break
-            elif action in ['y', 'yes']:
-                main()
-                input("\nPress Enter to continue...")
-            elif action in ['n', 'no']:
-                continue
-            else:
-                print("Please enter 'y' for yes, 'n' for no, or 'quit' to exit.")
-                
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!")
-            break
-        except Exception as e:
-            print(f"\nAn unexpected error occurred: {str(e)}")
-            print("Please try again.")
-
+        logger.error(f"Error processing ticket: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while processing the ticket: {str(e)}"
+        )
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
-        interactive_mode()
-    else:
-        main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
