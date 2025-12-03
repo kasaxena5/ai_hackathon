@@ -51,11 +51,11 @@ def classify_intent_and_appropriateness(state: TicketState) -> dict:
     ticket_text = f"{subject}\n{body}"
     
     # Use classifier to get intent and appropriateness
-    #result = _classifier.classify_intent_and_appropriateness(ticket_text)
+    result = _classifier.classify_intent_and_appropriateness(ticket_text)
     
     return {
-        "is_appropriate": True,
-        "intent": "access_request"
+        "is_appropriate": result["is_appropriate"],
+        "intent": result["intent"]
     }
 
 
