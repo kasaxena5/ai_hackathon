@@ -1,0 +1,18 @@
+intent,role,department,outcome,rule_id,comment
+hardware_issue,*,*,allowed,R1,All employees can raise hardware issues.
+software_issue,*,*,allowed,R2,All employees can raise software issues.
+network_issue,*,*,allowed,R3,All employees can raise network issues.
+access_request,intern,*,needs_approval,R4,Interns require manager approval for any access request.
+access_request,junior_engineer,engineering,needs_approval,R5,Junior engineers need approval for certain access requests.
+access_request,*,finance,needs_approval,R6,Finance-related access requires finance manager approval.
+access_request,analyst,finance,needs_approval,R7,Finance analysts must get approval for folder/app access.
+access_request,senior_analyst,finance,allowed,R8,Senior finance analysts can request standard finance access.
+access_request,sales_executive,sales,allowed,R9,Sales executives may request standard sales tools access.
+access_request,sales_manager,sales,allowed,R10,Sales managers allowed for most access.
+access_request,junior_engineer,engineering,blocked_by_auth,R11,Junior engineers cannot request admin rights.
+access_request,intern,engineering,blocked_by_auth,R12,Engineering interns cannot request admin or elevated access.
+access_request,*,hr,needs_approval,R13,HR-related access requires HR manager approval.
+access_request,*,it_support,allowed,R14,IT support staff allowed for internal system access.
+off_scope,*,*,blocked_by_auth,R15,Off-scope requests cannot be handled by IT.
+ambiguous,*,*,allowed,R16,Ambiguous requests allowed but must seek clarification.
+policy_question,*,*,allowed,R17,General policy questions allowed for all employees.
