@@ -9,6 +9,7 @@ class TicketState(TypedDict):
     """State schema for the ticket processing pipeline."""
     
     # Input fields
+    ticket_id: str
     employee_id: str
     subject: str
     body: str

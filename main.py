@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from ticket_graph import process_ticket
 import logging
+import uuid
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -106,13 +107,19 @@ async def process_support_ticket(ticket: TicketRequest):
                 detail="Ticket body cannot be empty"
             )
         
-        # Process the ticket through the pipeline
-        result = process_ticket(ticket.employee_id, ticket.subject, ticket.body)
+        # Generate a unique ticket ID
+        ticket_id = str(uuid.uuid4())
         
-        logger.info(f"Ticket processing completed with outcome: {result.get('outcome', 'unknown')}")
+        logger.info(f"Generated ticket_id: {ticket_id}")
+        
+        # Process the ticket through the pipeline
+        result = process_ticket(ticket_id, ticket.employee_id, ticket.subject, ticket.body)
+        
+        logger.info(f"Ticket {ticket_id} processing completed with outcome: {result.get('outcome', 'unknown')}")
         
         # Build response
         response = TicketResponse(
+            ticket_id=ticket_id,
             outcome=result.get('outcome', 'unknown'),
             response=result.get('response', 'No response available'),
         )

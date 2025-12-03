@@ -228,6 +228,87 @@ class SupportTicketRAG:
    - Temporary equipment if needed
    - Return damaged equipment when replaced"""
                 }
+            ],
+            
+            "off_scope": [
+                {
+                    "title": "Non-IT Related Requests",
+                    "content": """Guidance for requests outside IT support scope:
+
+1. HR and Personnel Issues:
+   - Contact HR directly for policy questions
+   - Benefits inquiries: use employee portal
+   - Time off requests: submit through manager
+   - Performance reviews: discuss with supervisor
+   - Workplace conflicts: escalate to HR
+
+2. Facilities and Physical Workspace:
+   - Building access issues: contact security
+   - HVAC problems: submit facilities request
+   - Parking permits: contact building management
+   - Office supplies: order through procurement
+   - Furniture requests: submit facilities ticket
+
+3. Finance and Procurement:
+   - Expense reports: use finance portal
+   - Purchase requests: follow procurement process
+   - Budget questions: contact finance team
+   - Vendor payments: accounts payable department
+   - Credit card issues: contact finance
+
+4. External Services and Personal Matters:
+   - Personal device issues: contact manufacturer
+   - Personal email problems: not supported
+   - Home internet issues: contact your ISP
+   - Personal software: purchase/support yourself
+   - Non-work applications: not IT supported
+
+For these types of requests, IT cannot provide assistance. Please contact the appropriate department directly."""
+                }
+            ],
+            
+            "access_request": [
+                {
+                    "title": "Standard Access Request Process",
+                    "content": """Access request procedures and guidelines:
+
+1. Application and System Access:
+   - Submit access request form through IT portal
+   - Include business justification
+   - Manager approval required for all requests
+   - Allow 2-3 business days for processing
+   - Temporary access available for urgent needs
+
+2. Network Drive and Shared Folder Access:
+   - Specify exact folder path needed
+   - Provide business reason for access
+   - Department head approval may be required
+   - Access reviews conducted quarterly
+   - Removal of access when role changes
+
+3. Database and Sensitive System Access:
+   - Requires additional security clearance
+   - Complete data handling training first
+   - Multi-level approval process
+   - Regular access reviews mandatory
+   - Audit trails maintained for compliance
+
+4. Administrative and Elevated Access:
+   - Admin access requires special justification
+   - C-level or IT director approval needed
+   - Temporary admin access only when possible
+   - Regular review and revocation
+   - Additional security monitoring applied
+
+5. Access Request Status:
+   - Check request status in IT portal
+   - Email notifications sent for updates
+   - Contact IT if urgent (include ticket number)
+   - Appeals process available if denied
+   - Documentation required for audit purposes
+
+Note: All access requests must follow company security policies and compliance requirements."""
+                }
             ]
         }
     
@@ -258,7 +339,9 @@ class SupportTicketRAG:
                 overlap_score = 0.0
             
             # Boost score for key technical terms
-            key_terms = ["vpn", "outlook", "teams", "keyboard", "monitor", "wifi", "network", "email", "policy", "remote", "hardware"]
+            key_terms = ["vpn", "outlook", "teams", "keyboard", "monitor", "wifi", "network", "email", "policy", "remote", "hardware", 
+                        "access", "permission", "database", "folder", "admin", "security", "approval", "request",
+                        "hr", "finance", "facilities", "personal", "procurement", "benefits", "parking"]
             key_matches = sum(1 for term in key_terms if term in ticket_lower and term in full_text)
             key_boost = key_matches * 0.1
             
@@ -310,6 +393,53 @@ Solution:"""
         Output: solved_by_rag OR escalate
         """
         
+        # Special handling for off_scope requests - provide guidance but always escalate
+        if intent == "off_scope":
+            context, relevance_score = self.search_knowledge_base(ticket_text, intent)
+            if context:
+                guidance = self.generate_solution(ticket_text, intent, context)
+                return {
+                    "status": "escalate",
+                    "message": f"This request is outside IT support scope. {guidance}",
+                    "employee_id": employee_id,
+                    "intent": intent,
+                    "kb_relevance": relevance_score,
+                    "debug_info": "Off-scope request - provided guidance but escalated"
+                }
+            else:
+                return {
+                    "status": "escalate", 
+                    "message": "This request appears to be outside IT support scope. Please contact the appropriate department for assistance.",
+                    "employee_id": employee_id,
+                    "intent": intent,
+                    "kb_relevance": 0.0,
+                    "debug_info": "Off-scope request - no KB context found"
+                }
+        
+        # Special handling for access_request - provide process guidance but escalate for actual processing
+        if intent == "access_request":
+            context, relevance_score = self.search_knowledge_base(ticket_text, intent)
+            if relevance_score >= 0.2 and context:  # Lower threshold for access requests
+                guidance = self.generate_solution(ticket_text, intent, context)
+                return {
+                    "status": "escalate",
+                    "message": f"For access requests, please follow the standard process: {guidance} Your request will be reviewed according to company security policies.",
+                    "employee_id": employee_id,
+                    "intent": intent,
+                    "kb_relevance": relevance_score,
+                    "debug_info": "Access request - provided process guidance but escalated for manual processing"
+                }
+            else:
+                return {
+                    "status": "escalate",
+                    "message": "Please submit your access request through the IT portal with business justification and manager approval. Allow 2-3 business days for processing.",
+                    "employee_id": employee_id,
+                    "intent": intent, 
+                    "kb_relevance": relevance_score,
+                    "debug_info": "Access request - standard escalation message"
+                }
+        
+        # Standard processing for other intents
         # Step 1: Search knowledge base for relevant context
         context, relevance_score = self.search_knowledge_base(ticket_text, intent)
         
@@ -385,6 +515,24 @@ def test_rag_system():
             "ticket": "My laptop charger is sparking and there is a burning smell when I plug it in.",
             "intent": "hardware_issue",
             "expected": "escalate"  # Safety issue - should escalate
+        },
+        {
+            "employee_id": "E005",
+            "ticket": "I need access to the finance database to complete my quarterly report.",
+            "intent": "access_request", 
+            "expected": "escalate"  # Access requests should always escalate with guidance
+        },
+        {
+            "employee_id": "E008",
+            "ticket": "Can you help me book a conference room for next week's meeting?",
+            "intent": "off_scope",
+            "expected": "escalate"  # Off-scope requests should escalate with guidance
+        },
+        {
+            "employee_id": "E010", 
+            "ticket": "How do I submit an expense report for my business travel?",
+            "intent": "off_scope",
+            "expected": "escalate"  # Finance-related, should provide guidance and escalate
         }
     ]
     

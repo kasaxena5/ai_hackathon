@@ -246,11 +246,12 @@ def get_compiled_graph():
     return graph.compile()
 
 
-def process_ticket(employee_id: str, subject: str, body: str) -> dict:
+def process_ticket(ticket_id: str, employee_id: str, subject: str, body: str) -> dict:
     """
     Process a support ticket through the pipeline.
     
     Args:
+        ticket_id: Unique identifier for the ticket
         employee_id: The ID of the employee submitting the ticket
         subject: The subject line of the ticket
         body: The body/description of the ticket
@@ -263,6 +264,7 @@ def process_ticket(employee_id: str, subject: str, body: str) -> dict:
     
     # Create initial state
     initial_state: TicketState = {
+        "ticket_id": ticket_id,
         "employee_id": employee_id,
         "subject": subject,
         "body": body,
