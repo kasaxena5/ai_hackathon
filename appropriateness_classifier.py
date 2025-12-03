@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-from langchain_openai import AzureChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from openai import AzureOpenAI
 import os
 import pandas as pd
 import json
 from typing import Dict
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -20,18 +18,22 @@ class IntentAppropriatenessClassifier:
     
     def __init__(
         self, 
-        azure_endpoint: str = "https://azureaiprojectskarasala.cognitiveservices.azure.com",
-        deployment_name: str = "gpt-4o-mini",
-        api_version: str = "2025-01-01-preview"
+        azure_api_key: str = None,
+        azure_endpoint: str = None,
+        deployment_name: str = None,
+        api_version: str = None
     ):
+        # Load from environment variables if not provided
+        self.azure_endpoint = azure_endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
+        self.api_key = azure_api_key or os.getenv("AZURE_OPENAI_API_KEY")
+        self.deployment_name = deployment_name or os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        self.api_version = api_version or os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
         
-        # Initialize Azure ChatOpenAI
-        self.llm = AzureChatOpenAI(
-            azure_endpoint=azure_endpoint,
-            azure_deployment=deployment_name,
-            api_version=api_version,
-            temperature=0,
-            api_key=os.environ.get("AZURE_OPENAI_API_KEY")
+        # Initialize Azure OpenAI client
+        self.client = AzureOpenAI(
+            azure_endpoint=self.azure_endpoint,
+            api_key=self.api_key,
+            api_version=self.api_version
         )
         
         # Load labeled examples for few-shot learning
@@ -133,13 +135,29 @@ Respond in JSON format with ONLY these two fields:
         
         system_prompt = self.build_system_prompt()
         
-        classification_prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("user", "Classify this ticket:\n\n{ticket_text}")
-        ])
+        user_message = f"Classify this ticket:\n\n{ticket_text}"
         
-        chain = classification_prompt | self.llm | StrOutputParser()
-        result = chain.invoke({"ticket_text": ticket_text})
+        try:
+            # Call Azure OpenAI
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=150,
+                temperature=0
+            )
+            
+            result = response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"Error calling Azure OpenAI: {str(e)}")
+            # Fallback to defaults
+            return {
+                "intent": "ambiguous",
+                "is_appropriate": True
+            }
         
         # Parse JSON response
         try:
