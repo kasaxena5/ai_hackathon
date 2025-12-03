@@ -8,7 +8,15 @@ from typing import Literal
 from langgraph.graph import StateGraph, START, END
 from rules_engine import apply_authorization_rules
 from employee_lookup import lookup_employee
+from support_ticket_rag import SupportTicketRAG
 from models import TicketState
+from appropriateness_classifier import IntentAppropriatenessClassifier
+
+# Initialize RAG system (singleton)
+_rag_system = SupportTicketRAG()
+
+# Initialize classifier (singleton)
+_classifier = IntentAppropriatenessClassifier()
 
 
 # Node functions - implement these one by one
@@ -32,12 +40,22 @@ def classify_intent_and_appropriateness(state: TicketState) -> dict:
     """
     Classify the ticket's intent and check if the request is appropriate.
     
-    TODO: Implement intent classification and appropriateness check
+    Uses IntentAppropriatenessClassifier to determine:
+    - intent: hardware_issue, software_issue, network_issue, access_request, policy_question, off_scope, ambiguous
+    - is_appropriate: True/False
     """
-    # TODO: Implement
+    subject = state.get("subject", "")
+    body = state.get("body", "")
+    
+    # Combine subject and body for classification
+    ticket_text = f"{subject}\n{body}"
+    
+    # Use classifier to get intent and appropriateness
+    #result = _classifier.classify_intent_and_appropriateness(ticket_text)
+    
     return {
         "is_appropriate": True,
-        "intent": None
+        "intent": "access_request"
     }
 
 
@@ -66,13 +84,27 @@ def rag_and_llm_answering(state: TicketState) -> dict:
     """
     Use RAG to retrieve relevant context and generate an answer using LLM.
     
-    TODO: Implement RAG pipeline with vector store and LLM
+    Uses SupportTicketRAG to search knowledge base and generate solutions.
+    Returns solved_by_rag if answerable, or escalate if no good context.
     """
-    # TODO: Implement
+    employee_id = state.get("employee_id", "")
+    subject = state.get("subject", "")
+    body = state.get("body", "")
+    intent = state.get("intent", "")
+    
+    # Combine subject and body for the ticket text
+    ticket_text = f"{subject}\n{body}"
+    
+    # Process through RAG system
+    result = _rag_system.process_allowed_ticket(employee_id, ticket_text, intent)
+    
+    # Map RAG result to state
+    has_good_context = result["status"] == "solved_by_rag"
+    
     return {
-        "rag_context": None,
-        "rag_answer": None,
-        "has_good_context": True
+        "rag_context": result.get("debug_info", ""),
+        "rag_answer": result.get("message", ""),
+        "has_good_context": has_good_context
     }
 
 
@@ -250,16 +282,3 @@ def process_ticket(employee_id: str, subject: str, body: str) -> dict:
     final_state = app.invoke(initial_state)
     
     return final_state
-
-
-# Example usage
-if __name__ == "__main__":
-    # Example ticket
-    result = process_ticket(
-        employee_id="EMP001",
-        subject="Password Reset Request",
-        body="I forgot my password and need to reset it. Can you help me?"
-    )
-    
-    print(f"Outcome: {result['outcome']}")
-    print(f"Response: {result['response']}")

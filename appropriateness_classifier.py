@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -6,6 +7,7 @@ import pandas as pd
 import json
 from typing import Dict
 
+load_dotenv()
 
 class IntentAppropriatenessClassifier:
     """
@@ -18,14 +20,10 @@ class IntentAppropriatenessClassifier:
     
     def __init__(
         self, 
-        azure_api_key: str = "",
         azure_endpoint: str = "https://azureaiprojectskarasala.cognitiveservices.azure.com",
         deployment_name: str = "gpt-4o-mini",
         api_version: str = "2025-01-01-preview"
     ):
-        # Set Azure OpenAI credentials
-        if azure_api_key:
-            os.environ["AZURE_OPENAI_API_KEY"] = azure_api_key
         
         # Initialize Azure ChatOpenAI
         self.llm = AzureChatOpenAI(
@@ -111,10 +109,10 @@ Example: "I need admin rights" is APPROPRIATE (legitimate request) but may be de
 ---
 **OUTPUT FORMAT:**
 Respond in JSON format with ONLY these two fields:
-{
+{{
   "intent": "one of: hardware_issue, software_issue, network_issue, access_request, policy_question, off_scope, ambiguous",
   "appropriateness": "appropriate or not_appropriate"
-}
+}}
 """
         
         return system_prompt
