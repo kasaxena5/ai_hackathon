@@ -72,30 +72,31 @@ class IntentAppropriatenessClassifier:
 1. Determine if the ticket is APPROPRIATE for IT support
 2. Classify it into the correct CATEGORY/INTENT
 
-**INTENTS/CATEGORIES:**
+**INTENTS/CATEGORIES (choose exactly one):**
 - hardware_issue: Physical device problems (laptop, keyboard, monitor, mouse, cables, chargers, batteries)
 - software_issue: Application problems (Outlook, Teams, browsers, Jira, ERP systems, tools)
 - network_issue: Connectivity problems (VPN, WiFi, internet, network access, internal systems)
 - access_request: Permission/access requests (folders, systems, admin rights, databases, VPN access)
 - policy_question: Questions about IT policies (WFH policy, reimbursement, equipment guidelines)
-- off_scope: Non-IT requests (facilities, cafeteria, HR matters, personal issues, AC, pest control)
-- ambiguous: Unclear or too vague to classify into above categories
+- off_scope: Non-IT requests (facilities, cafeteria, HR matters, personal issues, AC, pest control, general questions like "What is 2+2?")
 
 **APPROPRIATENESS RULES:**
 
 NOT_APPROPRIATE tickets are:
 - Off-scope requests (facilities, cafeteria, personal matters, etc.) → intent: off_scope
-- Unethical/malicious access requests (accessing others' emails, bypassing security, impersonation) → intent: access_request
+- Unethical/malicious access requests (accessing others' emails, bypassing security, impersonation, requesting others' passwords) → intent: access_request
 - Privacy violations (requesting passwords, monitoring others)
 - Security bypass attempts
+- General questions not related to IT support (e.g., "What is 2+2?", "Write me Python code")
 
 APPROPRIATE tickets are:
-- All legitimate IT requests within scope (hardware, software, network, policy questions)
+- All legitimate IT requests within scope (hardware, software, policy questions)
 - Standard access requests for work purposes (even if user lacks authorization)
 - Requests that follow normal business processes
 
 **IMPORTANT**: Appropriateness checks ETHICS and SCOPE, not authorization level.
 Example: "I need admin rights" is APPROPRIATE (legitimate request) but may be denied due to lack of authorization.
+Example: "Give me the CEO's mailbox password" is NOT_APPROPRIATE (unethical request).
 
 ---
 **EXAMPLES:**
@@ -112,7 +113,7 @@ Example: "I need admin rights" is APPROPRIATE (legitimate request) but may be de
 **OUTPUT FORMAT:**
 Respond in JSON format with ONLY these two fields:
 {{
-  "intent": "one of: hardware_issue, software_issue, network_issue, access_request, policy_question, off_scope, ambiguous",
+  "intent": "one of: hardware_issue, software_issue, network_issue, access_request, policy_question, off_scope",
   "appropriateness": "appropriate or not_appropriate"
 }}
 """
@@ -155,7 +156,7 @@ Respond in JSON format with ONLY these two fields:
             print(f"Error calling Azure OpenAI: {str(e)}")
             # Fallback to defaults
             return {
-                "intent": "ambiguous",
+                "intent": "off_scope",
                 "is_appropriate": True
             }
         
@@ -176,14 +177,12 @@ Respond in JSON format with ONLY these two fields:
             
         except (json.JSONDecodeError, IndexError, KeyError) as e:
             # Fallback parsing
-            intent = "ambiguous"
+            intent = "off_scope"
             appropriateness = "appropriate"
             
             # Try basic text parsing
             result_lower = result.lower()
-            if "off_scope" in result_lower:
-                intent = "off_scope"
-            elif "hardware" in result_lower:
+            if "hardware" in result_lower:
                 intent = "hardware_issue"
             elif "software" in result_lower:
                 intent = "software_issue"
@@ -193,6 +192,8 @@ Respond in JSON format with ONLY these two fields:
                 intent = "access_request"
             elif "policy" in result_lower:
                 intent = "policy_question"
+            elif "off_scope" in result_lower:
+                intent = "off_scope"
             
             if "not_appropriate" in result_lower or "not appropriate" in result_lower:
                 appropriateness = "not_appropriate"
